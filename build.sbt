@@ -58,8 +58,8 @@ val twitterUtilVersion = "6.23.0"
 val samzaVersion = "0.8.0"
 
 libraryDependencies ++= Seq(
-  "com.metamx" %% "scala-util" % "1.9.2" exclude("log4j", "log4j") force(),
-  "com.metamx" % "java-util" % "0.26.14" exclude("log4j", "log4j") force()
+  "com.metamx" %% "scala-util" % "1.9.2" exclude("log4j", "log4j") exclude("org.hyperic", "sigar") force(),
+  "com.metamx" % "java-util" % "0.26.14" exclude("log4j", "log4j") exclude("org.hyperic", "sigar") force()
 )
 
 libraryDependencies ++= Seq(
@@ -101,6 +101,7 @@ libraryDependencies ++= Seq(
     exclude("org.apache.logging.log4j", "log4j-api")
     exclude("org.apache.logging.log4j", "log4j-slf4j-impl")
     exclude("com.lmax", "disruptor") // Pulled in by log4j2, conflicts with the one Storm wants.
+    exclude("org.hyperic", "sigar")
     force(),
   "io.druid" % "druid-indexing-service" % druidVersion
     exclude("org.slf4j", "slf4j-log4j12")
@@ -109,6 +110,7 @@ libraryDependencies ++= Seq(
     exclude("org.apache.logging.log4j", "log4j-api")
     exclude("org.apache.logging.log4j", "log4j-slf4j-impl")
     exclude("com.lmax", "disruptor") // Pulled in by log4j2, conflicts with the one Storm wants.
+    exclude("org.hyperic", "sigar")
     force(),
   "com.google.inject" % "guice" % "4.0-beta" force(),
   "com.google.inject.extensions" % "guice-servlet" % "4.0-beta" force(),
