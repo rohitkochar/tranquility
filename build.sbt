@@ -39,7 +39,7 @@ parallelExecution in Test := false
 
 fork in Test := true
 
-javaOptions ++= Seq("-XX:MaxPermSize=256M")
+javaOptions ++= Seq("-XX:MaxPermSize=256M", "-Duser.timezone=UTC")
 
 publishArtifact in (Test, packageBin) := true
 
