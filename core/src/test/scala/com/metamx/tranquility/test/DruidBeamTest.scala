@@ -19,7 +19,7 @@ package com.metamx.tranquility.test
 
 import com.metamx.common.Granularity
 import com.metamx.tranquility.druid.DruidBeamMaker
-import org.joda.time.DateTime
+import org.joda.time.{DateTimeZone, Period, DateTime}
 import org.scalatest.FunSuite
 
 class DruidBeamTest extends FunSuite
@@ -27,17 +27,13 @@ class DruidBeamTest extends FunSuite
 
   test("GenerateFirehoseId")
   {
-    val dt = new DateTime("2010-02-03T12:34:56.789Z")
-    assert(DruidBeamMaker.generateBaseFirehoseId("x", Granularity.MINUTE, dt, 1) === "x-34-0001")
-    assert(DruidBeamMaker.generateBaseFirehoseId("x", Granularity.FIVE_MINUTE, dt, 1) === "x-34-0001")
-    assert(DruidBeamMaker.generateBaseFirehoseId("x", Granularity.TEN_MINUTE, dt, 1) === "x-34-0001")
-    assert(DruidBeamMaker.generateBaseFirehoseId("x", Granularity.FIFTEEN_MINUTE, dt, 1) === "x-34-0001")
-    assert(DruidBeamMaker.generateBaseFirehoseId("x", Granularity.HOUR, dt, 1) === "x-12-0001")
-    assert(DruidBeamMaker.generateBaseFirehoseId("x", Granularity.SIX_HOUR, dt, 1) === "x-12-0001")
-    assert(DruidBeamMaker.generateBaseFirehoseId("x", Granularity.DAY, dt, 1) === "x-03-0001")
-    assert(DruidBeamMaker.generateBaseFirehoseId("x", Granularity.WEEK, dt, 1) === "x-05-0001")
-    assert(DruidBeamMaker.generateBaseFirehoseId("x", Granularity.MONTH, dt, 1) === "x-02-0001")
-    assert(DruidBeamMaker.generateBaseFirehoseId("x", Granularity.YEAR, dt, 1) === "x-10-0001")
+    val dt = new DateTime("2010-02-03T12:34:56.789",DateTimeZone.UTC)
+    assert(DruidBeamMaker.generateBaseFirehoseId("x", Period.parse("PT5M"), dt, 1) === "x-34-0001")
+    assert(DruidBeamMaker.generateBaseFirehoseId("x",  Period.parse("PT2H"), dt, 1) === "x-12-0001")
+    assert(DruidBeamMaker.generateBaseFirehoseId("x",  Period.parse("P2D"), dt, 1) === "x-05-0001")
+    assert(DruidBeamMaker.generateBaseFirehoseId("x",  Period.parse("P2W"), dt, 1) === "x-03-0001")
+    assert(DruidBeamMaker.generateBaseFirehoseId("x", Period.parse("P35D"), dt, 1) === "x-02-0001")
+    assert(DruidBeamMaker.generateBaseFirehoseId("x", Period.parse("P370D"), dt, 1) === "x-10-0001")
   }
 
 }

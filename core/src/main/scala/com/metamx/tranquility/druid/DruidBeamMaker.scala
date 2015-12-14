@@ -45,8 +45,7 @@ import io.druid.segment.realtime.plumber.NoopRejectionPolicyFactory
 import io.druid.segment.realtime.plumber.ServerTimeRejectionPolicyFactory
 import io.druid.timeline.partition.LinearShardSpec
 import org.joda.time.chrono.ISOChronology
-import org.joda.time.DateTime
-import org.joda.time.Interval
+import org.joda.time.{DateTimeConstants, Period, DateTime, Interval}
 import org.scala_tools.time.Implicits._
 import scala.util.Random
 
@@ -142,9 +141,10 @@ class DruidBeamMaker[A: Timestamper](
       beamTuning.segmentGranularity.widen(interval) == interval,
       "Interval does not match segmentGranularity[%s]: %s" format(beamTuning.segmentGranularity, interval)
     )
+    val taskDuration = new Period(interval.start,interval.end + beamTuning.windowPeriod + config.firehoseGracePeriod);
     val availabilityGroup = DruidBeamMaker.generateBaseFirehoseId(
       location.dataSource,
-      beamTuning.segmentGranularity,
+      taskDuration,
       interval.start,
       partition
     )
@@ -216,24 +216,21 @@ class DruidBeamMaker[A: Timestamper](
 
 object DruidBeamMaker
 {
-  def generateBaseFirehoseId(dataSource: String, segmentGranularity: Granularity, ts: DateTime, partition: Int) = {
+  def generateBaseFirehoseId(dataSource: String, taskDuration:Period, ts: DateTime, partition: Int) = {
     // Not only is this a nasty hack, it also only works if the RT task hands things off in a timely manner. We'd rather
     // use UUIDs, but this creates a ton of clutter in service discovery.
+    //It may also break if task duration is changed across RT tasks
 
     val tsUtc = new DateTime(ts.millis, ISOChronology.getInstanceUTC)
 
-    val cycleBucket = segmentGranularity match {
-      case Granularity.MINUTE => tsUtc.minuteOfHour().get
-      case Granularity.FIVE_MINUTE => tsUtc.minuteOfHour().get
-      case Granularity.TEN_MINUTE => tsUtc.minuteOfHour().get
-      case Granularity.FIFTEEN_MINUTE => tsUtc.minuteOfHour().get
-      case Granularity.HOUR => tsUtc.hourOfDay().get
-      case Granularity.SIX_HOUR => tsUtc.hourOfDay().get
-      case Granularity.DAY => tsUtc.dayOfMonth().get
-      case Granularity.WEEK => tsUtc.weekOfWeekyear().get
-      case Granularity.MONTH => tsUtc.monthOfYear().get
-      case Granularity.YEAR => tsUtc.yearOfCentury().get
-      case x => throw new IllegalArgumentException("No gross firehose id hack for granularity[%s]" format x)
+    val cycleBucket = taskDuration match {
+      case i if(i.toStandardSeconds.getSeconds < DateTimeConstants.SECONDS_PER_HOUR) => tsUtc.minuteOfHour().get
+      case i if(i.toStandardSeconds().getSeconds < DateTimeConstants.SECONDS_PER_DAY) => tsUtc.hourOfDay().get
+      case i if(i.toStandardSeconds().getSeconds < DateTimeConstants.SECONDS_PER_WEEK) => tsUtc.weekOfWeekyear().get
+      case i if(i.toStandardSeconds().getSeconds < DateTimeConstants.SECONDS_PER_DAY *30) => tsUtc.dayOfMonth().get
+      case i if(i.toStandardSeconds.getSeconds < DateTimeConstants.SECONDS_PER_DAY*365) => tsUtc.monthOfYear().get
+      case i if(i.toStandardSeconds.getSeconds > DateTimeConstants.SECONDS_PER_DAY*365) => tsUtc.yearOfCentury().get
+      case x => throw new IllegalArgumentException("No gross firehose id hack for task duration [%s]" format x)
     }
 
     "%s-%02d-%04d".format(dataSource, cycleBucket, partition)
