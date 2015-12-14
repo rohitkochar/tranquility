@@ -45,7 +45,10 @@ import io.druid.segment.realtime.plumber.NoopRejectionPolicyFactory
 import io.druid.segment.realtime.plumber.ServerTimeRejectionPolicyFactory
 import io.druid.timeline.partition.LinearShardSpec
 import org.joda.time.chrono.ISOChronology
-import org.joda.time.{DateTimeConstants, Period, DateTime, Interval}
+import org.joda.time.DateTime
+import org.joda.time.Interval
+import org.joda.time.DateTimeConstants
+import org.joda.time.Period
 import org.scala_tools.time.Implicits._
 import scala.util.Random
 
