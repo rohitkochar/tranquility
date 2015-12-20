@@ -219,23 +219,23 @@ class DruidBeamMaker[A: Timestamper](
 
 object DruidBeamMaker
 {
-  def generateBaseFirehoseId(dataSource: String, taskDuration:Period, ts: DateTime, partition: Int) = {
+  def generateBaseFirehoseId(dataSource: String,taskDuration:Period, ts: DateTime, partition: Int) = {
     // Not only is this a nasty hack, it also only works if the RT task hands things off in a timely manner. We'd rather
     // use UUIDs, but this creates a ton of clutter in service discovery.
     //It may also break if task duration is changed across RT tasks
 
     val tsUtc = new DateTime(ts.millis, ISOChronology.getInstanceUTC)
 
+
     val cycleBucket = taskDuration match {
-      case i if(i.toStandardSeconds.getSeconds < DateTimeConstants.SECONDS_PER_HOUR) => tsUtc.minuteOfHour().get
-      case i if(i.toStandardSeconds().getSeconds < DateTimeConstants.SECONDS_PER_DAY) => tsUtc.hourOfDay().get
-      case i if(i.toStandardSeconds().getSeconds < DateTimeConstants.SECONDS_PER_WEEK) => tsUtc.weekOfWeekyear().get
-      case i if(i.toStandardSeconds().getSeconds < DateTimeConstants.SECONDS_PER_DAY *30) => tsUtc.dayOfMonth().get
-      case i if(i.toStandardSeconds.getSeconds < DateTimeConstants.SECONDS_PER_DAY*365) => tsUtc.monthOfYear().get
-      case i if(i.toStandardSeconds.getSeconds > DateTimeConstants.SECONDS_PER_DAY*365) => tsUtc.yearOfCentury().get
+      case i if(i.toStandardSeconds.getSeconds < DateTimeConstants.SECONDS_PER_HOUR) => "%02d".format(tsUtc.minuteOfHour().get)
+      case i if(i.toStandardSeconds().getSeconds < DateTimeConstants.SECONDS_PER_DAY) => "%02d-%02d" .format(tsUtc.hourOfDay().get,tsUtc.minuteOfHour().get)
+      case i if(i.toStandardSeconds().getSeconds < DateTimeConstants.SECONDS_PER_DAY *28) => "%02d-%02d-%02d" .format(tsUtc.dayOfMonth().get,tsUtc.hourOfDay().get,tsUtc.minuteOfHour().get)
+      case i if(i.toStandardSeconds.getSeconds < DateTimeConstants.SECONDS_PER_DAY*365) => "%02d-%02d-%02d-%02d" .format(tsUtc.monthOfYear().get,tsUtc.dayOfMonth().get,tsUtc.hourOfDay().get,tsUtc.minuteOfHour().get)
+      case i if(i.toStandardSeconds.getSeconds > DateTimeConstants.SECONDS_PER_DAY*365) => "%02d-%02d-%02d-%02d-%02d" .format(tsUtc.yearOfCentury().get,tsUtc.monthOfYear().get,tsUtc.dayOfMonth().get,tsUtc.hourOfDay().get,tsUtc.minuteOfHour().get)
       case x => throw new IllegalArgumentException("No gross firehose id hack for task duration [%s]" format x)
     }
 
-    "%s-%02d-%04d".format(dataSource, cycleBucket, partition)
+    "%s-%s-%04d".format(dataSource,cycleBucket, partition)
   }
 }

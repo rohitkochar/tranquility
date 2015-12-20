@@ -31,11 +31,11 @@ class DruidBeamTest extends FunSuite
   {
     val dt = new DateTime("2010-02-03T12:34:56.789",DateTimeZone.UTC)
     assert(DruidBeamMaker.generateBaseFirehoseId("x", Period.parse("PT5M"), dt, 1) === "x-34-0001")
-    assert(DruidBeamMaker.generateBaseFirehoseId("x",  Period.parse("PT2H"), dt, 1) === "x-12-0001")
-    assert(DruidBeamMaker.generateBaseFirehoseId("x",  Period.parse("P2D"), dt, 1) === "x-05-0001")
-    assert(DruidBeamMaker.generateBaseFirehoseId("x",  Period.parse("P2W"), dt, 1) === "x-03-0001")
-    assert(DruidBeamMaker.generateBaseFirehoseId("x", Period.parse("P35D"), dt, 1) === "x-02-0001")
-    assert(DruidBeamMaker.generateBaseFirehoseId("x", Period.parse("P370D"), dt, 1) === "x-10-0001")
+    assert(DruidBeamMaker.generateBaseFirehoseId("x",  Period.parse("PT2H"), dt, 1) === "x-12-34-0001")
+    assert(DruidBeamMaker.generateBaseFirehoseId("x",  Period.parse("P2D"), dt, 1) === "x-03-12-34-0001")
+    assert(DruidBeamMaker.generateBaseFirehoseId("x",  Period.parse("P2W"), dt, 1) === "x-03-12-34-0001")
+    assert(DruidBeamMaker.generateBaseFirehoseId("x", Period.parse("P35D"), dt, 1) === "x-02-03-12-34-0001")
+    assert(DruidBeamMaker.generateBaseFirehoseId("x", Period.parse("P370D"), dt, 1) === "x-10-02-03-12-34-0001")
   }
 
 }
