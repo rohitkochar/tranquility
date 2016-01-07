@@ -1,29 +1,29 @@
 /*
- * Tranquility.
- * Copyright 2013, 2014, 2015  Metamarkets Group, Inc.
+ * Licensed to Metamarkets Group Inc. (Metamarkets) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  Metamarkets licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
 package com.metamx.tranquility.test
 
-import com.fasterxml.jackson.annotation.JsonValue
 import com.metamx.common.Granularity
 import com.metamx.common.scala.Jackson
 import com.metamx.common.scala.Logging
 import com.metamx.common.scala.timekeeper.TestingTimekeeper
 import com.metamx.common.scala.timekeeper.Timekeeper
-import com.metamx.common.scala.untyped.Dict
 import com.metamx.tranquility.beam.ClusteredBeamTuning
 import com.metamx.tranquility.beam.RoundRobinBeam
 import com.metamx.tranquility.druid.DruidBeams
@@ -34,8 +34,8 @@ import com.metamx.tranquility.druid.MultipleFieldDruidSpatialDimension
 import com.metamx.tranquility.druid.SpecificDruidDimensions
 import com.metamx.tranquility.test.DirectDruidTest._
 import com.metamx.tranquility.test.common._
+import com.metamx.tranquility.tranquilizer.Tranquilizer
 import com.metamx.tranquility.typeclass.JavaObjectWriter
-import com.metamx.tranquility.typeclass.Timestamper
 import com.twitter.util.Await
 import com.twitter.util.Future
 import io.druid.data.input.impl.TimestampSpec
@@ -98,30 +98,31 @@ class DirectDruidTest
 
   test("Druid standalone") {
     withDruidStack {
-      (curator, broker, overlord) =>
+      (curator, broker, coordinator, overlord) =>
         val timekeeper = new TestingTimekeeper
-        val indexing = newBuilder(curator, timekeeper).buildService()
+        val indexing = newBuilder(curator, timekeeper).buildTranquilizer()
+        indexing.start()
         try {
           timekeeper.now = new DateTime().hourOfDay().roundFloorCopy()
           val eventsSent = Await.result(
             Future.collect(
-              generateEvents(timekeeper.now).map(x => indexing(Seq(x)))
-            ).map(_.sum)
-          )
+              generateEvents(timekeeper.now).map(indexing.send)
+            )
+          ).size
           assert(eventsSent === 2)
           runTestQueriesAndAssertions(broker, timekeeper)
         }
         finally {
-          Await.result(indexing.close())
+          indexing.stop()
         }
     }
   }
 
   test("Druid standalone - Custom ObjectWriter") {
     withDruidStack {
-      (curator, broker, overlord) =>
+      (curator, broker, coordinator, overlord) =>
         val timekeeper = new TestingTimekeeper
-        val indexing = newBuilder(curator, timekeeper).objectWriter(
+        val beam = newBuilder(curator, timekeeper).objectWriter(
           new JavaObjectWriter[SimpleEvent]
           {
             override def asBytes(obj: SimpleEvent) = throw new UnsupportedOperationException
@@ -133,23 +134,25 @@ class DirectDruidTest
             }
 
             /**
-             * @return content type of the serialized form
-             */
+              * @return content type of the serialized form
+              */
             override def contentType: String = MediaType.APPLICATION_JSON
           }
-        ).buildService()
+        ).buildBeam()
+        val indexing = Tranquilizer.create(beam)
+        indexing.start()
         try {
           timekeeper.now = new DateTime().hourOfDay().roundFloorCopy()
           val eventsSent = Await.result(
             Future.collect(
-              generateEvents(timekeeper.now).map(x => indexing(Seq(x)))
-            ).map(_.sum)
-          )
+              generateEvents(timekeeper.now).map(indexing.send)
+            )
+          ).size
           assert(eventsSent === 2)
           runTestQueriesAndAssertions(broker, timekeeper)
         }
         finally {
-          Await.result(indexing.close())
+          indexing.stop()
         }
     }
   }

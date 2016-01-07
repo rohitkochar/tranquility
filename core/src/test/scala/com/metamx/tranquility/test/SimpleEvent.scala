@@ -21,6 +21,7 @@ package com.metamx.tranquility.test
 
 import com.fasterxml.jackson.annotation.JsonValue
 import com.metamx.common.scala.untyped.Dict
+import com.metamx.common.scala.untyped.long
 import com.metamx.tranquility.test.DirectDruidTest.TimeColumn
 import com.metamx.tranquility.typeclass.Timestamper
 import org.scala_tools.time.Imports._
@@ -34,7 +35,10 @@ case class SimpleEvent(ts: DateTime, fields: Dict)
 object SimpleEvent
 {
   implicit val simpleEventTimestamper = new Timestamper[SimpleEvent] {
-
     def timestamp(a: SimpleEvent) = a.ts
+  }
+
+  def fromMap(d: Dict): SimpleEvent = {
+    SimpleEvent(new DateTime(long(d(TimeColumn)) * 1000), d)
   }
 }

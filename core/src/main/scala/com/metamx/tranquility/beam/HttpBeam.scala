@@ -1,18 +1,20 @@
 /*
- * Tranquility.
- * Copyright 2013, 2014, 2015  Metamarkets Group, Inc.
+ * Licensed to Metamarkets Group Inc. (Metamarkets) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  Metamarkets licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 package com.metamx.tranquility.beam
 
@@ -33,14 +35,14 @@ import com.metamx.tranquility.typeclass.Timestamper
 import com.twitter.finagle.Name
 import com.twitter.finagle.builder.ClientBuilder
 import com.twitter.finagle.http.Http
+import com.twitter.finagle.http.Request
 import com.twitter.finagle.util.DefaultTimer
+import com.twitter.io.Buf
 import com.twitter.util.Future
 import com.twitter.util.Timer
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.util.zip.GZIPOutputStream
-import org.jboss.netty.buffer.ChannelBuffers
-import org.jboss.netty.handler.codec.http.HttpRequest
 import org.scala_tools.time.Imports._
 
 /**
@@ -89,7 +91,7 @@ class HttpBeam[A: Timestamper](
     }
   }
 
-  private[this] def request(events: Seq[A]): HttpRequest = HttpPost(uri.path) withEffect {
+  private[this] def request(events: Seq[A]): Request = HttpPost(uri.path) withEffect {
     req =>
       val bytes = (new ByteArrayOutputStream withEffect {
         baos =>
@@ -100,15 +102,15 @@ class HttpBeam[A: Timestamper](
           }
           gzos.close()
       }).toByteArray
-      req.headers.set("Host", hostAndPort)
-      req.headers.set("Content-Type", "text/plain")
-      req.headers.set("Content-Encoding", "gzip")
-      req.headers.set("Content-Length", bytes.size)
+      req.headerMap("Host") = hostAndPort
+      req.headerMap("Content-Type") = "text/plain"
+      req.headerMap("Content-Encoding") = "gzip"
+      req.headerMap("Content-Length") = bytes.size.toString
       for (x <- auth) {
         val base64 = BaseEncoding.base64().encode(x.getBytes(Charsets.UTF_8))
-        req.headers.set("Authorization", "Basic %s" format base64)
+        req.headerMap("Authorization") = "Basic %s" format base64
       }
-      req.setContent(ChannelBuffers.wrappedBuffer(bytes))
+      req.content = Buf.ByteArray.Owned(bytes)
   }
 
   private[this] def isTransient(period: Period): Exception => Boolean = {
@@ -131,7 +133,7 @@ class HttpBeam[A: Timestamper](
         val response = FutureRetry.onErrors(Seq(retryable), Backoff.standard(), new DateTime(0)) {
           client(request(eventsChunk)) map {
             response =>
-              response.getStatus.getCode match {
+              response.statusCode match {
                 case code if code / 100 == 2 =>
                   // 2xx means our events were accepted
                   eventsChunk.size
@@ -139,7 +141,7 @@ class HttpBeam[A: Timestamper](
                 case code =>
                   throw new IOException(
                     "Service call to %s failed with status: %s %s" format
-                      (uri, code, response.getStatus.getReasonPhrase)
+                      (uri, code, response.status.reason)
                   )
               }
           }

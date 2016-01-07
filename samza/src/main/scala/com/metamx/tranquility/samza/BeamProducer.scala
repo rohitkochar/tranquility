@@ -1,25 +1,26 @@
 /*
- * Tranquility.
- * Copyright 2013, 2014, 2015  Metamarkets Group, Inc.
+ * Licensed to Metamarkets Group Inc. (Metamarkets) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  Metamarkets licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 package com.metamx.tranquility.samza
 
-import com.metamx.common.ISE
 import com.metamx.common.scala.Logging
-import com.metamx.tranquility.beam.BeamPacketizer
-import com.metamx.tranquility.beam.BeamPacketizerListener
+import com.metamx.tranquility.tranquilizer.SimpleTranquilizerAdapter
+import com.metamx.tranquility.tranquilizer.Tranquilizer
 import org.apache.samza.config.Config
 import org.apache.samza.system.OutgoingMessageEnvelope
 import org.apache.samza.system.SystemProducer
@@ -35,14 +36,14 @@ class BeamProducer(
   throwOnError: Boolean
 ) extends SystemProducer with Logging
 {
-  // stream => beam packetizer
-  private val beams = mutable.Map[String, BeamPacketizer[Any]]()
+  // stream => sender
+  private val senders = mutable.Map[String, SimpleTranquilizerAdapter[Any]]()
 
   override def start() {}
 
   override def stop() {
-    for (beamPacketizer <- beams.values) {
-      beamPacketizer.close()
+    for (sender <- senders.values) {
+      sender.stop()
     }
   }
 
@@ -51,32 +52,45 @@ class BeamProducer(
   override def send(source: String, envelope: OutgoingMessageEnvelope) {
     val streamName = envelope.getSystemStream.getStream
     val message = envelope.getMessage
-    val beamPacketizer = beams.getOrElseUpdate(streamName, {
-      log.info("Creating beam for stream[%s.%s].", systemName, streamName)
-      val listener = new BeamPacketizerListener[Any] {
-        override def ack(a: Any) {}
-        override def fail(e: Throwable, message: Any) {
-          if (throwOnError) {
-            throw new ISE(e, "Failed to send message[%s]." format message)
-          }
-        }
+    val sender = senders.getOrElseUpdate(
+      streamName, {
+        log.info("Creating beam for stream[%s.%s].", systemName, streamName)
+        val t = Tranquilizer.create(
+          beamFactory.makeBeam(new SystemStream(systemName, streamName), config),
+          batchSize,
+          maxPendingBatches,
+          Tranquilizer.DefaultLingerMillis
+        )
+        t.start()
+        t.simple(false)
       }
-      val p = new BeamPacketizer(
-        beamFactory.makeBeam(new SystemStream(systemName, streamName), config),
-        listener,
-        batchSize,
-        maxPendingBatches
-      )
-      p.start()
-      p
-    })
-    beamPacketizer.send(message)
+    )
+
+    try {
+      sender.send(message)
+    }
+    catch {
+      case e: Exception =>
+        log.error(e, "Send failed")
+        if (throwOnError) {
+          throw e
+        }
+    }
   }
 
   override def flush(source: String) {
     // So flippin' lazy. Flush ALL the data!
-    for ((streamName, beamPacketizer) <- beams) {
-      beamPacketizer.flush()
+    for ((streamName, sender) <- senders) {
+      try {
+        sender.flush()
+      }
+      catch {
+        case e: Exception =>
+          log.error(e, "Send failed")
+          if (throwOnError) {
+            throw e
+          }
+      }
     }
   }
 }
